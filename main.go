@@ -209,10 +209,18 @@ func main() {
 	var applyCmd = &cobra.Command{
 		Use:   "apply [name]",
 		Short: "Apply the deployment",
-		Args:  cobra.ExactArgs(1),
+		Args:  cobra.ExactArgs(0),
 		Run: func(cmd *cobra.Command, args []string) {
-			name = args[0]
-			if err := apply(name); err != nil {
+			var nameList []string
+			switch len(args) {
+			case 0:
+				nameList = append(nameList, "default")
+			default:
+				nameList = args
+			}
+			if err := fp.Transform(nameList, func(name string) error {
+				return apply(name)
+			}).Filter(fp.ConditionHasError).Reduce(fp.AccumulateCombineErrors, nil); err != nil {
 				fmt.Println(err)
 			}
 		},
