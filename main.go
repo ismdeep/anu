@@ -27,13 +27,38 @@ type Config struct {
 }
 
 func runSSHCommand(host string, user string, port int, command string) error {
-	cmd := exec.Command("ssh", "-p", fmt.Sprintf("%v", port), fmt.Sprintf("%s@%s", user, host), command)
+	cmd := exec.Command(
+		"ssh",
+		"-p", fmt.Sprintf("%v", port),
+		"-o", "StrictHostKeyChecking=no",
+		fmt.Sprintf("%s@%s", user, host), command)
+	fmt.Println(cmd.String())
+	cmd.Stdin = nil
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
 	return cmd.Run()
 }
 
 func runRsync(src string, dest string, port int) error {
-	cmd := exec.Command("rsync", "-a", "-r", "--no-i-r", "--info=progress2", "--info=name0", "--no-owner", "--no-group", "--no-perms", "--delete",
-		"--exclude-from=.lemuria/rsync-exclude-list", "--exclude=.lemuria", "-e", fmt.Sprintf("ssh -p %v", port), src, dest)
+	cmd := exec.Command(
+		"rsync",
+		"-a",
+		"-r",
+		"--no-i-r",
+		"--info=progress2",
+		"--info=name0",
+		"--no-owner",
+		"--no-group",
+		"--no-perms",
+		"--delete",
+		"-e", "ssh -o StrictHostKeyChecking=no",
+		"--exclude-from=.lemuria/rsync-exclude-list",
+		"--exclude=.lemuria",
+		"-e", fmt.Sprintf("ssh -p %v", port), src, dest)
+	fmt.Println(cmd.String())
+	cmd.Stdin = nil
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
 	return cmd.Run()
 }
 
