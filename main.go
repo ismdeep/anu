@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -12,9 +13,34 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+var LogWriter io.Writer
+
+func init() {
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		panic(err)
+	}
+
+	logDir := filepath.Join(homeDir, ".anu", "log")
+
+	if err := os.MkdirAll(logDir, 0755); err != nil {
+		panic(err)
+	}
+
+	logFile := filepath.Join(logDir, fmt.Sprintf("anu.log"))
+
+	f, err := os.OpenFile(logFile, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+	if err != nil {
+		panic(err)
+	}
+
+	LogWriter = f
+}
+
 type Job struct {
 	Type    string   `json:"type"`
 	Host    string   `json:"host"`
+	Hosts   []string `json:"hosts"`
 	User    string   `json:"user"`
 	Port    int      `json:"port"`
 	Workdir string   `json:"workdir"`
@@ -32,10 +58,9 @@ func runSSHCommand(host string, user string, port int, command string) error {
 		"-p", fmt.Sprintf("%v", port),
 		"-o", "StrictHostKeyChecking=no",
 		fmt.Sprintf("%s@%s", user, host), command)
-	fmt.Println(cmd.String())
 	cmd.Stdin = nil
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
+	cmd.Stdout = LogWriter
+	cmd.Stderr = LogWriter
 	return cmd.Run()
 }
 
@@ -55,10 +80,9 @@ func runRsync(src string, dest string, port int) error {
 		"--exclude-from=.lemuria/rsync-exclude-list",
 		"--exclude=.lemuria",
 		"-e", fmt.Sprintf("ssh -p %v", port), src, dest)
-	fmt.Println(cmd.String())
 	cmd.Stdin = nil
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
+	cmd.Stdout = LogWriter
+	cmd.Stderr = LogWriter
 	return cmd.Run()
 }
 
@@ -131,7 +155,6 @@ func applyMake(job Job) error {
 		return err
 	}
 
-	fmt.Println("Sending files ...")
 	if err := runRsync(".", fmt.Sprintf("%s@%s:%s/", job.User, job.Host, job.Workdir), job.Port); err != nil {
 		return err
 	}
@@ -174,13 +197,44 @@ func applyShell(job Job) error {
 }
 
 func applyJson(job Job) error {
+
+	if len(job.Hosts) > 0 {
+		return fp.TransformAsync(job.Hosts, func(host string) error {
+			return applyJson(Job{
+				Type:    job.Type,
+				Host:    host,
+				Hosts:   nil,
+				User:    job.User,
+				Port:    job.Port,
+				Workdir: job.Workdir,
+				Shell:   job.Shell,
+				Targets: job.Targets,
+			})
+		}).Reduce(fp.AccumulateCombineErrors, nil)
+	}
+
 	switch job.Type {
 	case "docker-compose":
-		return applyDockerCompose(job)
+		if err := applyDockerCompose(job); err != nil {
+			fmt.Printf("[FAIL] %v\n", job.Host)
+			return err
+		}
+		fmt.Printf("[ OK ] %v\n", job.Host)
+		return nil
 	case "make":
-		return applyMake(job)
+		if err := applyMake(job); err != nil {
+			fmt.Printf("[FAIL] %v\n", job.Host)
+			return err
+		}
+		fmt.Printf("[ OK ] %v\n", job.Host)
+		return nil
 	case "shell":
-		return applyShell(job)
+		if err := applyShell(job); err != nil {
+			fmt.Printf("[FAIL] %v\n", job.Host)
+			return err
+		}
+		fmt.Printf("[ OK ] %v\n", job.Host)
+		return nil
 	default:
 		return errors.New("[ERROR] unsupported type: " + job.Type)
 	}
