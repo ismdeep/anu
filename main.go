@@ -130,7 +130,6 @@ func applyDockerCompose(job Job) error {
 		return err
 	}
 
-	fmt.Printf("[OK] %v\n", job.Host)
 	return nil
 }
 

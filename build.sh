@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-set -ex
+set -e
 
 # Get to workdir
 cd "$(realpath "$(dirname "$(realpath "${BASH_SOURCE[0]}")")")"
