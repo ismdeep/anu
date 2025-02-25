@@ -2,7 +2,7 @@
 
 # Usage: bash go.env.sh <go-version>
 #    <go-version> example:
-#      - go1.20.12
+#      - go1.23.6
 
 go_version="${1:?}" && \
 target_binary_root="${HOME}/.x98/runtime/${go_version}" && \

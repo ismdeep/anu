@@ -6,7 +6,7 @@ set -e
 cd "$(realpath "$(dirname "$(realpath "${BASH_SOURCE[0]}")")")"
 
 # load go env
-source "go.env.sh" "go1.20.13"
+source "go.env.sh" "go1.23.6"
 
 # Git 提交时间
 COMMIT_TIME=$(TZ=Asia/Shanghai git log -1 --format="%cd" --date=format:"%Y%m%d%H%M%S")
