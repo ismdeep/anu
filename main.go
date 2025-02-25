@@ -13,28 +13,14 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-var LogWriter io.Writer
+var (
+	LogWriterStdout io.Writer
+	LogWriterStderr io.Writer
+)
 
 func init() {
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		panic(err)
-	}
-
-	logDir := filepath.Join(homeDir, ".anu", "log")
-
-	if err := os.MkdirAll(logDir, 0755); err != nil {
-		panic(err)
-	}
-
-	logFile := filepath.Join(logDir, fmt.Sprintf("anu.log"))
-
-	f, err := os.OpenFile(logFile, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
-	if err != nil {
-		panic(err)
-	}
-
-	LogWriter = f
+	LogWriterStdout = os.Stdout
+	LogWriterStderr = os.Stderr
 }
 
 type Job struct {
@@ -59,8 +45,8 @@ func runSSHCommand(host string, user string, port int, command string) error {
 		"-o", "StrictHostKeyChecking=no",
 		fmt.Sprintf("%s@%s", user, host), command)
 	cmd.Stdin = nil
-	cmd.Stdout = LogWriter
-	cmd.Stderr = LogWriter
+	cmd.Stdout = LogWriterStdout
+	cmd.Stderr = LogWriterStderr
 	return cmd.Run()
 }
 
@@ -81,8 +67,8 @@ func runRsync(src string, dest string, port int) error {
 		"--exclude=.lemuria",
 		"-e", fmt.Sprintf("ssh -p %v", port), src, dest)
 	cmd.Stdin = nil
-	cmd.Stdout = LogWriter
-	cmd.Stderr = LogWriter
+	cmd.Stdout = LogWriterStdout
+	cmd.Stderr = LogWriterStderr
 	return cmd.Run()
 }
 
