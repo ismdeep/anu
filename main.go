@@ -7,10 +7,14 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime/debug"
+	"time"
 
 	"github.com/kopeisec/fp"
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
+
+	"github.com/ismdeep/anu/version"
 )
 
 var (
@@ -290,7 +294,29 @@ func main() {
 		},
 	}
 
+	var versionCmd = &cobra.Command{
+		Use:   "version",
+		Short: "Print the version number",
+		Run: func(cmd *cobra.Command, args []string) {
+			fmt.Printf("anu %v\n", version.Version)
+			buildInfo, ok := debug.ReadBuildInfo()
+			if ok {
+				fmt.Printf("go version: %v\n", buildInfo.GoVersion)
+				for _, kv := range buildInfo.Settings {
+					switch kv.Key {
+					case "vcs.revision":
+						fmt.Printf("commit id: %v\n", kv.Value)
+					case "vcs.time":
+						LastCommit, _ := time.Parse(time.RFC3339, kv.Value)
+						fmt.Printf("commit time: %v\n", LastCommit)
+					}
+				}
+			}
+		},
+	}
+
 	rootCmd.AddCommand(applyCmd)
+	rootCmd.AddCommand(versionCmd)
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Println("[ERROR]", err.Error())
 		os.Exit(1)
