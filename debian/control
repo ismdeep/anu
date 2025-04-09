@@ -1,0 +1,11 @@
+Source: anu
+Section: utils
+Priority: optional
+Maintainer: L. Jiang <l.jiang.1024@gmail.com>
+Build-Depends: debhelper (>= 9), rsync
+Standards-Version: 3.9.8
+
+Package: anu
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: anu

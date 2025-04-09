@@ -1,0 +1,16 @@
+#!/usr/bin/make -f
+%:
+	dh $@
+
+override_dh_installdeb:
+	dh_installdeb
+	find ${CURDIR}/debian/*/DEBIAN -name conffiles -delete
+
+override_dh_auto_build:
+	bash build.sh
+
+override_dh_auto_install:
+	mkdir -p debian/anu/
+	rsync -a -r --no-i-r --info=progress2 --info=name0 --no-owner --no-group --no-perms \
+		./deb/ \
+		debian/anu/
