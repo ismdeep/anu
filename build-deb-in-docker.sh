@@ -26,6 +26,10 @@ cd "$(realpath "$(dirname "$(realpath "${BASH_SOURCE[0]}")")")"
 # Get arch
 arch="${1:?}"
 
+# 获取版本号（根据 debian/changelog）
+version=$(< debian/changelog head -n 1 | awk '{print $2}' | sed 's/[()]//g')
+log_info "版本号: ${version}"
+
 log_info "Creating docker container (${arch}) ..."
 if [ "$(docker ps | grep -c "anu-deb-builder-${arch}")" == "0" ]; then
   docker run \
@@ -57,5 +61,5 @@ docker exec --workdir /anu "anu-deb-builder-${arch}" \
 log_success "deb package built."
 
 mkdir -p ./output/
-docker cp "anu-deb-builder-${arch}:/anu_0.1.0_${arch}.deb" ./output/
-log_success "deb package anu_0.1.0_${arch}.deb copied to output/"
+docker cp "anu-deb-builder-${arch}:/anu_${version}_${arch}.deb" ./output/
+log_success "deb package anu_${version}_${arch}.deb copied to output/"
