@@ -10,11 +10,10 @@ import (
 	"runtime/debug"
 	"time"
 
+	"github.com/ismdeep/anu/version"
 	"github.com/kopeisec/fp"
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
-
-	"github.com/ismdeep/anu/version"
 )
 
 var (
@@ -29,6 +28,7 @@ func init() {
 
 type Job struct {
 	Type    string   `json:"type"`
+	Pull    string   `json:"pull"`
 	Host    string   `json:"host"`
 	Hosts   []string `json:"hosts"`
 	User    string   `json:"user"`
@@ -106,9 +106,11 @@ func applyDockerCompose(job Job) error {
 		return err
 	}
 
-	if err := runSSHCommand(job.Host, job.User, job.Port, fmt.Sprintf("docker-compose --project-directory %s pull", job.Workdir)); err != nil {
-		fmt.Println("[WARN] run docker-compose pull on remote failed.")
-		return err
+	if job.Pull == "always" {
+		if err := runSSHCommand(job.Host, job.User, job.Port, fmt.Sprintf("docker-compose --project-directory %s pull", job.Workdir)); err != nil {
+			fmt.Println("[WARN] run docker-compose pull on remote failed.")
+			return err
+		}
 	}
 
 	if err := runSSHCommand(job.Host, job.User, job.Port, fmt.Sprintf("docker-compose --project-directory %s up -d", job.Workdir)); err != nil {
