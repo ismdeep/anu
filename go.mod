@@ -4,7 +4,7 @@ go 1.23.6
 
 require (
 	github.com/kopeisec/fp v0.0.0-20250729121817-9dffe175936d
-	github.com/spf13/cobra v1.10.1
+	github.com/spf13/cobra v1.10.2
 	gopkg.in/yaml.v3 v3.0.1
 )
 
