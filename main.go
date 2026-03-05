@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"errors"
 	"fmt"
 	"io"
@@ -26,6 +27,31 @@ func init() {
 	LogWriterStderr = os.Stderr
 }
 
+type indentWriter struct {
+	writer io.Writer
+	prefix string
+}
+
+func (w *indentWriter) Write(p []byte) (n int, err error) {
+	scanner := bufio.NewScanner(bufio.NewReader(bufio.NewReader(nil)))
+	for i := 0; i < len(p); {
+		lineEnd := i
+		for lineEnd < len(p) && p[lineEnd] != '\n' {
+			lineEnd++
+		}
+		if lineEnd < len(p) {
+			lineEnd++
+		}
+		if lineEnd > i {
+			w.writer.Write([]byte(w.prefix))
+			w.writer.Write(p[i:lineEnd])
+		}
+		i = lineEnd
+	}
+	_ = scanner
+	return len(p), nil
+}
+
 type Job struct {
 	Type    string   `json:"type"`
 	Pull    string   `json:"pull"`
@@ -43,18 +69,21 @@ type Config struct {
 }
 
 func runSSHCommand(host string, user string, port int, command string) error {
+	fmt.Fprintf(LogWriterStdout, "[INFO] Running SSH command on %s@%s:%d\n", user, host, port)
+	fmt.Fprintf(LogWriterStdout, "[INFO] Command: %s\n", command)
 	cmd := exec.Command(
 		"ssh",
 		"-p", fmt.Sprintf("%v", port),
 		"-o", "StrictHostKeyChecking=no",
 		fmt.Sprintf("%s@%s", user, host), command)
 	cmd.Stdin = nil
-	cmd.Stdout = LogWriterStdout
-	cmd.Stderr = LogWriterStderr
+	cmd.Stdout = &indentWriter{writer: LogWriterStdout, prefix: "  "}
+	cmd.Stderr = &indentWriter{writer: LogWriterStderr, prefix: "  "}
 	return cmd.Run()
 }
 
 func runRsync(src string, dest string, port int) error {
+	fmt.Fprintf(LogWriterStdout, "[INFO] Syncing files: %s -> %s\n", src, dest)
 	cmd := exec.Command(
 		"rsync",
 		"-a",
@@ -71,12 +100,17 @@ func runRsync(src string, dest string, port int) error {
 		"--exclude=.lemuria",
 		"-e", fmt.Sprintf("ssh -p %v", port), src, dest)
 	cmd.Stdin = nil
-	cmd.Stdout = LogWriterStdout
-	cmd.Stderr = LogWriterStderr
-	return cmd.Run()
+	cmd.Stdout = &indentWriter{writer: LogWriterStdout, prefix: "  "}
+	cmd.Stderr = &indentWriter{writer: LogWriterStderr, prefix: "  "}
+	err := cmd.Run()
+	if err == nil {
+		fmt.Fprintf(LogWriterStdout, "[INFO] File sync completed\n")
+	}
+	return err
 }
 
 func applyDockerCompose(job Job) error {
+	fmt.Printf("[INFO] Starting docker-compose deployment on %s\n", job.Host)
 	if job.Host == "" {
 		return errors.New("[ERROR] host is empty")
 	}
@@ -92,32 +126,37 @@ func applyDockerCompose(job Job) error {
 		return errors.New("[ERROR] port is empty")
 	}
 
+	fmt.Printf("[INFO] Creating remote directory: %s\n", job.Workdir)
 	if err := runSSHCommand(job.Host, job.User, job.Port, fmt.Sprintf("mkdir -p %s/", job.Workdir)); err != nil {
 		fmt.Println("[ERROR] failed to create directory")
 		return err
 	}
 
+	fmt.Println("[INFO] Stopping existing containers...")
 	if err := runSSHCommand(job.Host, job.User, job.Port, fmt.Sprintf("docker-compose --project-directory %s down", job.Workdir)); err != nil {
 		fmt.Println("[WARN] run docker-compose down on remote failed.")
 	}
 
 	if err := runRsync(".", fmt.Sprintf("%s@%s:%s/", job.User, job.Host, job.Workdir), job.Port); err != nil {
-		fmt.Println("[WARN] run rsync on remote failed.")
+		fmt.Println("[ERROR] run rsync on remote failed.")
 		return err
 	}
 
 	if job.Pull == "always" {
+		fmt.Println("[INFO] Pulling latest images...")
 		if err := runSSHCommand(job.Host, job.User, job.Port, fmt.Sprintf("docker-compose --project-directory %s pull", job.Workdir)); err != nil {
-			fmt.Println("[WARN] run docker-compose pull on remote failed.")
+			fmt.Println("[ERROR] run docker-compose pull on remote failed.")
 			return err
 		}
 	}
 
+	fmt.Println("[INFO] Starting containers...")
 	if err := runSSHCommand(job.Host, job.User, job.Port, fmt.Sprintf("docker-compose --project-directory %s up -d", job.Workdir)); err != nil {
-		fmt.Println("[WARN] run docker-compose up on remote failed.")
+		fmt.Println("[ERROR] run docker-compose up on remote failed.")
 		return err
 	}
 
+	fmt.Println("[INFO] Checking container status...")
 	if err := runSSHCommand(job.Host, job.User, job.Port, fmt.Sprintf("docker-compose --project-directory %s ps", job.Workdir)); err != nil {
 		return err
 	}
@@ -126,6 +165,7 @@ func applyDockerCompose(job Job) error {
 }
 
 func applyMake(job Job) error {
+	fmt.Printf("[INFO] Starting make deployment on %s\n", job.Host)
 	if job.Host == "" {
 		return errors.New("[ERROR] host is empty")
 	}
@@ -142,6 +182,7 @@ func applyMake(job Job) error {
 		return errors.New("[ERROR] port is empty")
 	}
 
+	fmt.Printf("[INFO] Creating remote directory: %s\n", job.Workdir)
 	if err := runSSHCommand(job.Host, job.User, job.Port, fmt.Sprintf("mkdir -p %s/", job.Workdir)); err != nil {
 		return err
 	}
@@ -153,9 +194,11 @@ func applyMake(job Job) error {
 	return fp.Transform(
 		fp.Wrap(job.Targets).Filter(fp.ConditionShouldNotEmpty),
 		func(target string) error {
+			fmt.Printf("[INFO] Running make target: %s\n", target)
 			if err := runSSHCommand(job.Host, job.User, job.Port, fmt.Sprintf("cd %s && make %s", job.Workdir, target)); err != nil {
 				return err
 			}
+			fmt.Printf("[INFO] Make target '%s' completed\n", target)
 			return nil
 		}).
 		Filter(fp.ConditionHasError).
@@ -163,6 +206,7 @@ func applyMake(job Job) error {
 }
 
 func applyShell(job Job) error {
+	fmt.Printf("[INFO] Starting shell deployment on %s\n", job.Host)
 	if job.Host == "" {
 		return errors.New("[ERROR] host is empty")
 	}
@@ -170,20 +214,21 @@ func applyShell(job Job) error {
 		return errors.New("[ERROR] workdir is empty")
 	}
 
+	fmt.Printf("[INFO] Creating remote directory: %s\n", job.Workdir)
 	if err := runSSHCommand(job.Host, job.User, job.Port, fmt.Sprintf("mkdir -p %s/", job.Workdir)); err != nil {
 		return err
 	}
 
-	fmt.Println("Sending files ...")
 	if err := runRsync(".", fmt.Sprintf("%s@%s:%s/", job.User, job.Host, job.Workdir), job.Port); err != nil {
 		return err
 	}
 
+	fmt.Printf("[INFO] Executing shell command: %s\n", job.Shell)
 	if err := runSSHCommand(job.Host, job.User, job.Port, fmt.Sprintf("cd %s && %s", job.Workdir, job.Shell)); err != nil {
 		return err
 	}
 
-	fmt.Printf("[INFO] run shell [%s] on %s %s successfully.\n", job.Shell, job.Host, job.Workdir)
+	fmt.Printf("[INFO] Shell command completed successfully on %s\n", job.Host)
 	return nil
 }
 
@@ -232,6 +277,7 @@ func applyJson(job Job) error {
 }
 
 func apply(name string) error {
+	fmt.Printf("[INFO] Loading configuration: %s\n", name)
 	configFile := filepath.Join(".lemuria", name+".yaml")
 	data, err := os.ReadFile(configFile)
 	if err != nil {
@@ -242,6 +288,7 @@ func apply(name string) error {
 	if err := yaml.Unmarshal(data, &cfg); err != nil {
 		return err
 	}
+	fmt.Printf("[INFO] Configuration loaded, found %d job(s)\n", len(cfg.Jobs))
 
 	jobs := fp.Wrap(cfg.Jobs).Map(func(job Job) Job {
 		// 端口默认为 22
