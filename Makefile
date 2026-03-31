@@ -1,8 +1,15 @@
 help:
 	@cat Makefile | grep '# `' | grep -v '@cat Makefile'
 
-# `make build-deb-in-docker`           通过Docker环境构建amd64和arm64架构的deb包
-.PHONY: build-deb-in-docker
-build-deb-in-docker:
-	bash build-deb-in-docker.sh amd64
-	bash build-deb-in-docker.sh arm64
+# `make build`
+.PHONY: build
+build:
+	CGO_ENABLED=0 GOOS=linux GOARCH=amd64  go build -o build/anu_linux_amd64  -trimpath -ldflags '-s -w' .
+	CGO_ENABLED=0 GOOS=linux GOARCH=arm64  go build -o build/anu_linux_arm64  -trimpath -ldflags '-s -w' .
+	CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -o build/anu_darwin_amd64 -trimpath -ldflags '-s -w' .
+	CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -o build/anu_darwin_arm64 -trimpath -ldflags '-s -w' .
+
+# `make clean`
+.PHONY: clean
+clean:
+	rm -rf build/

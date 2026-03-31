@@ -11,7 +11,6 @@ import (
 	"runtime/debug"
 	"time"
 
-	"github.com/ismdeep/anu/version"
 	"github.com/kopeisec/fp"
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
@@ -168,6 +167,47 @@ func applyDockerCompose(job Job) error {
 	return nil
 }
 
+func applyKubernetesYAML(job Job) error {
+	fmt.Println(logf("INFO", "Starting kubernetes yaml deployment on %s", job.Host))
+	if job.Host == "" {
+		return errors.New(logf("ERROR", "host is empty"))
+	}
+	if job.Workdir == "" {
+		return errors.New(logf("ERROR", "workdir is empty"))
+	}
+
+	if job.User == "" {
+		return errors.New(logf("ERROR", "user is empty"))
+	}
+
+	if job.Port == 0 {
+		return errors.New(logf("ERROR", "port is empty"))
+	}
+
+	fmt.Println(logf("INFO", "Creating remote directory: %s", job.Workdir))
+	if err := runSSHCommand(job.Host, job.User, job.Port, fmt.Sprintf("mkdir -p %s/", job.Workdir)); err != nil {
+		fmt.Println(logf("ERROR", "failed to create directory"))
+		return err
+	}
+
+	if err := runRsync(".", fmt.Sprintf("%s@%s:%s/", job.User, job.Host, job.Workdir), job.Port); err != nil {
+		fmt.Println(logf("ERROR", "run rsync on remote failed."))
+		return err
+	}
+
+	applyCmd := fmt.Sprintf(
+		"cd %s && files=$(find . -type f \\( -name '*.yaml' -o -name '*.yml' \\) | sort) && if [ -z \"$files\" ]; then echo 'no kubernetes yaml files found'; exit 1; fi && echo \"$files\" | while IFS= read -r file; do kubectl apply -f \"$file\"; done",
+		job.Workdir,
+	)
+	fmt.Println(logf("INFO", "Applying kubernetes yaml files..."))
+	if err := runSSHCommand(job.Host, job.User, job.Port, applyCmd); err != nil {
+		fmt.Println(logf("ERROR", "run kubectl apply on remote failed."))
+		return err
+	}
+
+	return nil
+}
+
 func applyMake(job Job) error {
 	fmt.Println(logf("INFO", "Starting make deployment on %s", job.Host))
 	if job.Host == "" {
@@ -242,6 +282,7 @@ func applyJson(job Job) error {
 		return fp.TransformAsync(job.Hosts, func(host string) error {
 			return applyJson(Job{
 				Type:    job.Type,
+				Pull:    job.Pull,
 				Host:    host,
 				Hosts:   nil,
 				User:    job.User,
@@ -270,6 +311,13 @@ func applyJson(job Job) error {
 		return nil
 	case "shell":
 		if err := applyShell(job); err != nil {
+			fmt.Println(logf("FAIL", "%v", job.Host))
+			return err
+		}
+		fmt.Println(logf(" OK ", "%v", job.Host))
+		return nil
+	case "k8s":
+		if err := applyKubernetesYAML(job); err != nil {
 			fmt.Println(logf("FAIL", "%v", job.Host))
 			return err
 		}
@@ -351,7 +399,7 @@ func main() {
 		Use:   "version",
 		Short: "Print the version number",
 		Run: func(cmd *cobra.Command, args []string) {
-			fmt.Printf("anu %v\n", version.Version)
+			fmt.Printf("anu %v\n", Version)
 			buildInfo, ok := debug.ReadBuildInfo()
 			if ok {
 				fmt.Printf("go version: %v\n", buildInfo.GoVersion)

@@ -4,5 +4,8 @@
 # macOS
 .DS_Store
 
-# output
-/output/
+# vendor
+/vendor/
+
+# build
+/build/
