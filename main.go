@@ -135,9 +135,11 @@ func applyDockerCompose(job Job) error {
 		return err
 	}
 
-	fmt.Println(logf("INFO", "Stopping existing containers..."))
-	if err := runSSHCommand(job.Host, job.User, job.Port, fmt.Sprintf("docker-compose --project-directory %s down", job.Workdir)); err != nil {
-		fmt.Println(logf("WARN", "run docker-compose down on remote failed."))
+	if !fastMode {
+		fmt.Println(logf("INFO", "Stopping existing containers..."))
+		if err := runSSHCommand(job.Host, job.User, job.Port, fmt.Sprintf("docker-compose --project-directory %s down", job.Workdir)); err != nil {
+			fmt.Println(logf("WARN", "run docker-compose down on remote failed."))
+		}
 	}
 
 	if err := runRsync(".", fmt.Sprintf("%s@%s:%s/", job.User, job.Host, job.Workdir), job.Port); err != nil {
@@ -362,6 +364,8 @@ func apply(name string) error {
 	}).Filter(fp.ConditionHasError).Reduce(fp.AccumulateCombineErrors, nil)
 }
 
+var fastMode bool
+
 func main() {
 	var name string
 
@@ -394,6 +398,7 @@ func main() {
 			}
 		},
 	}
+	applyCmd.PersistentFlags().BoolVar(&fastMode, "fast", false, "Fast mode")
 
 	var versionCmd = &cobra.Command{
 		Use:   "version",
