@@ -1,7 +1,7 @@
 # github.com/inconshreveable/mousetrap v1.1.0
 ## explicit; go 1.18
 github.com/inconshreveable/mousetrap
-# github.com/kopeisec/fp v0.0.0-20260518141301-bfb39b4432f8
+# github.com/kopeisec/fp v0.0.0-20260612103817-72cd21f992c9
 ## explicit; go 1.21
 github.com/kopeisec/fp
 # github.com/spf13/cobra v1.10.2

@@ -1,9 +1,9 @@
 module github.com/ismdeep/anu
 
-go 1.26.3
+go 1.26.5
 
 require (
-	github.com/kopeisec/fp v0.0.0-20260518141301-bfb39b4432f8
+	github.com/kopeisec/fp v0.0.0-20260612103817-72cd21f992c9
 	github.com/spf13/cobra v1.10.2
 	gopkg.in/yaml.v3 v3.0.1
 )
