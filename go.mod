@@ -1,6 +1,6 @@
 module github.com/ismdeep/anu
 
-go 1.26.5
+go 1.27.1
 
 require (
 	github.com/kopeisec/fp v0.0.0-20260612103817-72cd21f992c9
